@@ -38,11 +38,21 @@ fn license_file_path_in(
     Ok(config_dir.join(format!("{}.key", product_code)))
 }
 
+/// Loads a previously-stored, verified license for `product_code`, or
+/// if none exists, calls `prompt` to obtain one, verifies it, and
+/// stores it for next time. Identical behavior whether called by a
+/// launcher on first run or a standalone product binary that has
+/// never seen a launcher — the only shared state is this file.
+///
+/// Returns both the parsed `License` and the raw key string it was
+/// verified from — callers that need to make further authenticated
+/// requests (e.g. a launcher calling a download endpoint) need the
+/// raw string, not just the parsed fields.
 pub fn load_or_prompt_license<F>(
     pubs: &[VerifyingKey],
     product_code: &str,
     prompt: F,
-) -> Result<License, StoredLicenseError>
+) -> Result<(License, String), StoredLicenseError>
 where
     F: FnOnce() -> Option<String>,
 {
@@ -50,26 +60,22 @@ where
     load_or_prompt_license_in(&config_dir, pubs, product_code, prompt)
 }
 
-/// Same behavior as `load_or_prompt_license`, but reads/writes under
-/// `config_dir` instead of the real OS config location. Exists so
-/// tests can exercise the full logic against a temp directory rather
-/// than the caller's real filesystem.
 fn load_or_prompt_license_in<F>(
     config_dir: &Path,
     pubs: &[VerifyingKey],
     product_code: &str,
     prompt: F,
-) -> Result<License, StoredLicenseError>
+) -> Result<(License, String), StoredLicenseError>
 where
     F: FnOnce() -> Option<String>,
 {
     let path = license_file_path_in(config_dir, product_code)?;
 
     if let Ok(stored_key) = fs::read_to_string(&path) {
-        let stored_key = stored_key.trim();
-        if let Ok(license) = verify_any(pubs, stored_key) {
+        let stored_key = stored_key.trim().to_string();
+        if let Ok(license) = verify_any(pubs, &stored_key) {
             if license.product == product_code {
-                return Ok(license);
+                return Ok((license, stored_key));
             }
         }
     }
@@ -82,7 +88,7 @@ where
     }
 
     fs::write(&path, &entered_key)?;
-    Ok(license)
+    Ok((license, entered_key))
 }
 
 #[cfg(test)]
@@ -99,24 +105,27 @@ mod tests {
         let key = issue_test_license(&signing_key, "BOOK", 1, 1, 1_700_000_000);
 
         let mut prompt_calls = 0;
-        let license = load_or_prompt_license_in(&tmp, &[verifying_key], "BOOK", || {
-            prompt_calls += 1;
-            Some(key.clone())
-        })
-        .expect("should verify and store");
+        let (license, returned_key) =
+            load_or_prompt_license_in(&tmp, &[verifying_key], "BOOK", || {
+                prompt_calls += 1;
+                Some(key.clone())
+            })
+            .expect("should verify and store");
 
         assert_eq!(license.product, "BOOK");
+        assert_eq!(returned_key, key);
         assert_eq!(prompt_calls, 1);
 
-        // Second call should load from storage, never prompting again.
         let mut second_prompt_calls = 0;
-        let license2 = load_or_prompt_license_in(&tmp, &[verifying_key], "BOOK", || {
-            second_prompt_calls += 1;
-            None
-        })
-        .expect("should load from storage without prompting");
+        let (license2, returned_key2) =
+            load_or_prompt_license_in(&tmp, &[verifying_key], "BOOK", || {
+                second_prompt_calls += 1;
+                None
+            })
+            .expect("should load from storage without prompting");
 
         assert_eq!(license2.product, "BOOK");
+        assert_eq!(returned_key2, key);
         assert_eq!(second_prompt_calls, 0);
 
         std::fs::remove_dir_all(&tmp).ok();
@@ -128,19 +137,20 @@ mod tests {
         std::fs::create_dir_all(&tmp).unwrap();
 
         let (signing_key, verifying_key) = test_keypair();
-        // A genuinely valid BOOK license...
         let key = issue_test_license(&signing_key, "BOOK", 1, 1, 1_700_000_000);
         std::fs::write(tmp.join("TOOL.key"), &key).unwrap();
 
-        // ...must not satisfy a binary that expects TOOL.
         let mut prompted = false;
         let result = load_or_prompt_license_in(&tmp, &[verifying_key], "TOOL", || {
             prompted = true;
-            None // simulate user cancelling the prompt
+            None
         });
 
         assert!(result.is_err());
-        assert!(prompted, "should have fallen through to prompting, not silently accepted the mismatched product");
+        assert!(
+            prompted,
+            "should have fallen through to prompting, not silently accepted the mismatched product"
+        );
 
         std::fs::remove_dir_all(&tmp).ok();
     }

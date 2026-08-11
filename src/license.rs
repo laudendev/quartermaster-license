@@ -5,7 +5,7 @@ const SIG_LEN: usize = 64;
 const RAW_LEN: usize = PAYLOAD_LEN + SIG_LEN; // 97
 const CURRENT_VERSION: u8 = 1;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct License {
     pub version: u8,
     pub id: [u8; 16],

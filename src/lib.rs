@@ -3,5 +3,4 @@ pub mod license;
 pub mod storage;
 
 pub use license::{verify, verify_any, License, LicenseError};
-pub use storage::{load_or_prompt_license, StoredLicenseError};
-
+pub use storage::{load_or_prompt_license, load_stored_license, store_license, StoredLicenseError};

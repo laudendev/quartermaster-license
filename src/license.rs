@@ -52,8 +52,8 @@ pub fn verify(pub_key: &VerifyingKey, key: &str) -> Result<License, LicenseError
     let mut id = [0u8; 16];
     id.copy_from_slice(&payload[1..17]);
 
-    let product = String::from_utf8(payload[17..21].to_vec())
-        .map_err(|_| LicenseError::Malformed)?;
+    let product =
+        String::from_utf8(payload[17..21].to_vec()).map_err(|_| LicenseError::Malformed)?;
 
     let major_ver = u16::from_be_bytes([payload[21], payload[22]]);
     let seats = u16::from_be_bytes([payload[23], payload[24]]);
@@ -171,8 +171,7 @@ pub(crate) mod tests {
         let mut tampered = Vec::with_capacity(RAW_LEN);
         tampered.extend_from_slice(resigned_payload);
         tampered.extend_from_slice(&new_sig.to_bytes());
-        let tampered_key =
-            base32::encode(base32::Alphabet::Rfc4648 { padding: false }, &tampered);
+        let tampered_key = base32::encode(base32::Alphabet::Rfc4648 { padding: false }, &tampered);
 
         match verify(&verifying_key, &tampered_key) {
             Err(LicenseError::UnsupportedVersion) => {}

@@ -2,13 +2,19 @@
 name = "quartermaster-license"
 version = "0.1.0"
 edition = "2021"
+description = "Offline Ed25519 license-key verification and storage for Quartermaster-licensed software"
+license = "MIT"
+repository = "https://github.com/laudendev/quartermaster-license"
 
 [dependencies]
 directories = "5"
-ed25519-dalek = { version = "2", features = ["rand_core"] }
+ed25519-dalek = "2"
 base32 = "0.5"
 sha2 = "0.10"
 hex = "0.4"
+
+[dev-dependencies]
+ed25519-dalek = { version = "2", features = ["rand_core"] }
 rand = "0.8"
 
 [target.'cfg(target_os = "windows")'.dependencies]

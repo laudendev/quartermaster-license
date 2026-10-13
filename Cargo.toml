@@ -3,7 +3,7 @@ name = "quartermaster-license"
 version = "0.1.0"
 edition = "2021"
 description = "Offline Ed25519 license-key verification and storage for Quartermaster-licensed software"
-license = "MIT"
+license = "GPL-3.0-only"
 repository = "https://github.com/laudendev/quartermaster-license"
 
 [dependencies]

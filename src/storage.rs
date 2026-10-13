@@ -50,7 +50,9 @@ pub fn load_stored_license(
     load_stored_license_in(&config_dir, pubs, product_code)
 }
 
-fn load_stored_license_in(
+/// Like [`load_stored_license`], but reads from `config_dir` instead of the
+/// shared Quartermaster directory. For products that keep their own state.
+pub fn load_stored_license_in(
     config_dir: &Path,
     pubs: &[VerifyingKey],
     product_code: &str,
@@ -81,7 +83,8 @@ pub fn store_license(
     store_license_in(&config_dir, pubs, product_code, key)
 }
 
-fn store_license_in(
+/// Like [`store_license`], but writes into `config_dir`.
+pub fn store_license_in(
     config_dir: &Path,
     pubs: &[VerifyingKey],
     product_code: &str,
@@ -97,6 +100,19 @@ fn store_license_in(
     write_private(&tmp, key.as_bytes())?;
     fs::rename(&tmp, &path)?;
     Ok(license)
+}
+
+/// Deletes the stored key for `product_code` from `config_dir`. A missing
+/// file is not an error.
+pub fn remove_stored_license_in(
+    config_dir: &Path,
+    product_code: &str,
+) -> Result<(), StoredLicenseError> {
+    match fs::remove_file(config_dir.join(format!("{}.key", product_code))) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.into()),
+    }
 }
 
 #[cfg(unix)]
@@ -214,6 +230,22 @@ mod tests {
         assert!(load_stored_license_in(&dir, &[v], "BOOK")
             .unwrap()
             .is_none());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn remove_deletes_the_key_and_tolerates_absence() {
+        let dir = fresh_dir("remove");
+        let (sk, v) = test_keypair();
+        let key = issue_test_license(&sk, "BOOK", 1, 1, 1);
+        store_license_in(&dir, &[v], "BOOK", &key).unwrap();
+        assert!(dir.join("BOOK.key").exists());
+        remove_stored_license_in(&dir, "BOOK").unwrap();
+        assert!(!dir.join("BOOK.key").exists());
+        assert!(load_stored_license_in(&dir, &[v], "BOOK")
+            .unwrap()
+            .is_none());
+        remove_stored_license_in(&dir, "BOOK").unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }
 

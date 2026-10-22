@@ -9,3 +9,8 @@ pub use storage::{
     store_license, store_license_in, StoredLicenseError,
 };
 pub use trial::{verify_trial, verify_trial_any, Trial, TrialError};
+
+pub mod hardware;
+pub mod smbios;
+pub mod trial_store;
+pub mod trial_v2;

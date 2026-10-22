@@ -51,3 +51,9 @@ fn read_machine_id() -> Result<String, FingerprintError> {
     key.get_value("MachineGuid")
         .map_err(|_| FingerprintError::MachineIdUnavailable)
 }
+
+/// The operating system's own machine ID, used only as a last-resort trial
+/// signal when no hardware identifier can be read.
+pub(crate) fn machine_id() -> Option<String> {
+    read_machine_id().ok()
+}

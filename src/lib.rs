@@ -14,3 +14,4 @@ pub mod hardware;
 pub mod smbios;
 pub mod trial_store;
 pub mod trial_v2;
+pub mod update;

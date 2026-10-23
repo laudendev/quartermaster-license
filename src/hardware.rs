@@ -151,12 +151,26 @@ pub fn disk_ids(names: &[String]) -> Vec<String> {
         .iter()
         .filter(|n| !n.contains("-part"))
         .filter(|n| n.starts_with("ata-") || n.starts_with("virtio-") || is_nvme_with_serial(n))
-        .filter(|n| n.chars().count() >= 12 && usable_text(n))
+        .filter(|n| n.chars().count() >= 12 && usable_text(n) && !unusable_disk(n))
         .cloned()
         .collect();
     disks.sort();
     disks.dedup();
     disks
+}
+
+/// Disks that cannot tell computers apart: QEMU's emulated SATA/IDE disks and
+/// CD-ROMs carry a per-VM counter as their serial (`QM00001`, ...), so unrelated
+/// virtual machines share it, and optical drives come and go. A QEMU disk whose
+/// serial was set by the administrator is kept.
+fn unusable_disk(name: &str) -> bool {
+    let upper = name.to_ascii_uppercase();
+    if upper.contains("QEMU_HARDDISK_QM") || upper.contains("QEMU_DVD-ROM_QM") {
+        return true;
+    }
+    ["DVD", "CD-ROM", "CDROM", "CD_ROM", "BD-R"]
+        .iter()
+        .any(|token| upper.contains(token))
 }
 
 fn is_nvme_with_serial(name: &str) -> bool {
@@ -470,5 +484,41 @@ mod tests {
         for (i, x) in h.iter().enumerate() {
             assert!(!h[i + 1..].contains(x), "repeated signal");
         }
+    }
+}
+
+#[cfg(test)]
+mod denylist_tests {
+    use super::*;
+
+    fn names(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn qemu_default_disks_are_not_signals() {
+        let got = disk_ids(&names(&[
+            "ata-QEMU_HARDDISK_QM00001",
+            "ata-QEMU_HARDDISK_QM00001-part1",
+            "ata-QEMU_DVD-ROM_QM00003",
+            "ata-QEMU_HARDDISK_MYSERIAL12345",
+        ]));
+        assert_eq!(got, ["ata-QEMU_HARDDISK_MYSERIAL12345"]);
+    }
+
+    #[test]
+    fn optical_drives_are_not_signals() {
+        let got = disk_ids(&names(&[
+            "ata-HL-DT-ST_DVD+_-RW_GU90N_TESTSERIAL1",
+            "ata-PLEXTOR_CD-ROM_PX-40TS_TESTSERIAL2",
+            "ata-HL-DT-ST_BD-RE_WH16NS40_TESTSERIAL3",
+            "ata-Samsung_SSD_860_EVO_500GB_TESTSER1",
+        ]));
+        assert_eq!(got, ["ata-Samsung_SSD_860_EVO_500GB_TESTSER1"]);
+    }
+
+    #[test]
+    fn a_vm_with_only_default_disks_has_no_disk_signal() {
+        assert!(disk_ids(&names(&["ata-QEMU_HARDDISK_QM00001"])).is_empty());
     }
 }

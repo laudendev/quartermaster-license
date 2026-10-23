@@ -82,6 +82,7 @@ const PLACEHOLDERS: &[&str] = &[
     "1234567890",
     "0123456789",
     "123456789",
+    "type2 - board serial number",
 ];
 
 fn valid_serial(serial: &str) -> bool {
@@ -89,7 +90,12 @@ fn valid_serial(serial: &str) -> bool {
     if s.is_empty() {
         return false;
     }
-    let lower = s.to_ascii_lowercase();
+    // Runs of spaces and letter case never hide a placeholder.
+    let lower = s
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_lowercase();
     if PLACEHOLDERS.contains(&lower.as_str()) {
         return false;
     }
@@ -404,5 +410,19 @@ mod tests {
         let mut t = vec![1, 0, 0, 0, 0, 0];
         t.extend(table());
         assert!(parse_table(&t).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod denylist_tests {
+    use super::*;
+
+    #[test]
+    fn extra_spaces_and_case_do_not_hide_a_placeholder() {
+        assert!(!valid_serial("To  Be Filled   By O.E.M."));
+        assert!(!valid_serial("  TYPE2 - BOARD SERIAL NUMBER "));
+        assert!(!valid_serial("Type2 - Board Serial Number"));
+        assert!(valid_serial("PF000TEST"));
+        assert!(valid_serial("Type2 - Board Serial Number 7"));
     }
 }
